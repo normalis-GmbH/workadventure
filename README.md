@@ -4,7 +4,7 @@
 <a href="https://x.com/workadventure_" target="blank"><img src="https://img.shields.io/twitter/follow/workadventure_.svg?style=social" /></a>
 ![visitors](https://vbr.nathanchung.dev/badge?page_id=workadventure.map-starter-kit&color=00cf00)
 
-![office map thumbnail](./office.png)
+![office map thumbnail](./normalis_office.png)
 
 🗺️ This is a starter kit to help you build your own map for [WorkAdventure](https://workadventu.re).
 

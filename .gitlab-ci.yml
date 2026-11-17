@@ -1,0 +1,64 @@
+stages:
+  - deploy
+
+workflow:
+  rules:
+    # Push to main, or manual run via "Run pipeline" in the GitLab UI
+    - if: $CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+build-and-deploy:
+  stage: deploy
+  image: node:20
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .npm/
+  script:
+    - npm ci --cache .npm --prefer-offline
+    - npm run buildmap
+    - |
+      # Reads a value from .env (ignores commented-out lines)
+      from_env_file() {
+        grep "^[[:space:]]*$1=" .env | head -n1 | cut -d '=' -f2- | tr -d '\r'
+      }
+
+      # UPLOAD_MODE: CI variable takes precedence, otherwise .env
+      UPLOAD_MODE="${UPLOAD_MODE:-$(from_env_file UPLOAD_MODE)}"
+      if [ -z "$UPLOAD_MODE" ]; then
+        echo "Error: UPLOAD_MODE is not set in GitLab CI variables or .env."
+        exit 1
+      fi
+      export UPLOAD_MODE
+      echo "UPLOAD_MODE=$UPLOAD_MODE"
+
+      if [ "$UPLOAD_MODE" != "MAP_STORAGE" ]; then
+        echo "Error: UPLOAD_MODE '$UPLOAD_MODE' is not supported by this pipeline (only MAP_STORAGE)."
+        exit 1
+      fi
+
+      # MAP_STORAGE_API_KEY must always come from GitLab CI variables
+      if [ -z "$MAP_STORAGE_API_KEY" ]; then
+        echo "Error: MAP_STORAGE_API_KEY is not set in GitLab CI variables."
+        exit 1
+      fi
+
+      # MAP_STORAGE_URL can fall back to .env if not set as CI variable
+      MAP_STORAGE_URL="${MAP_STORAGE_URL:-$(from_env_file MAP_STORAGE_URL)}"
+      if [ -z "$MAP_STORAGE_URL" ]; then
+        echo "Error: MAP_STORAGE_URL is not set in GitLab CI variables or .env."
+        exit 1
+      fi
+      export MAP_STORAGE_URL
+
+      # UPLOAD_DIRECTORY can fall back to .env, and to <namespace>-<project> if not in .env
+      UPLOAD_DIRECTORY="${UPLOAD_DIRECTORY:-$(from_env_file UPLOAD_DIRECTORY)}"
+      if [ -z "$UPLOAD_DIRECTORY" ]; then
+        UPLOAD_DIRECTORY="${CI_PROJECT_NAMESPACE//\//-}-${CI_PROJECT_NAME}"
+        echo "Warning: UPLOAD_DIRECTORY was not found; set to $UPLOAD_DIRECTORY."
+      fi
+      export UPLOAD_DIRECTORY
+
+      npm run upload-only
